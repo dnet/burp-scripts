@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
 from __future__ import print_function, with_statement
+from mmap import mmap, ACCESS_READ
+from shutil import copyfileobj
+from contextlib import closing
 from sys import stderr
-from os import path
+from os import path, SEEK_SET
 
-BLOCKSIZE = 4096
 SEPARATOR = '\r\n\r\n'
 
 def process(files):
@@ -17,17 +19,11 @@ def process(files):
         found_header = False
         with file(file_name, 'rb') as http_resp:
             with file(output_name, 'wb') as output:
-                while True:
-                    input_block = http_resp.read(BLOCKSIZE)
-                    if not input_block:
-                        break
-                    if found_header:
-                        output.write(input_block)
-                    else:
-                        idx = input_block.find(SEPARATOR)
-                        if idx >= 0:
-                            output.write(input_block[idx + len(SEPARATOR):])
-                            found_header = True
+                with closing(mmap(http_resp.fileno(), 0, access=ACCESS_READ)) as http_resp_mmap:
+                    pos = http_resp_mmap.find(SEPARATOR)
+                if pos >= 0:
+                    http_resp.seek(pos + len(SEPARATOR), SEEK_SET)
+                copyfileobj(http_resp, output)
 
 
 if __name__ == '__main__':
